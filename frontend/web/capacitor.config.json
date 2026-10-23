@@ -3,6 +3,7 @@
   "appName": "Twacha",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "cleartext": true
   }
 }

@@ -2,9 +2,10 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import * as api from '../api/client';
 import { prepareImage, makeThumbnail } from '../api/image';
 
-const PROFILE_KEY = 'twacha.profile';
-const LAST_KEY = 'twacha.lastScan';
-const THUMBS_KEY = 'twacha.thumbs';
+const USER_KEY = 'twacha.user';
+const KEEP_KEY = 'twacha.keepThumbnails';
+// Things that stay on the phone are stored per account, so two people sharing a phone never see each other's.
+const userKey = (id, name) => `twacha.u${id}.${name}`;
 
 function read(key, fallback) {
   try {
@@ -23,24 +24,65 @@ const Ctx = createContext(null);
 export const useAppData = () => useContext(Ctx);
 
 export function AppDataProvider({ children }) {
-  // profile: { name, city, consent, keepThumbnails } or null before onboarding
-  const [profile, setProfileState] = useState(() => read(PROFILE_KEY, null));
-  const [lastScan, setLastScan] = useState(() => read(LAST_KEY, null)); // latest ScanResponse (no photo)
-  const [thumbs, setThumbs] = useState(() => read(THUMBS_KEY, {}));     // { [scanId]: dataURL } on this phone only
-  const [history, setHistory] = useState(null);                          // HistoryResponse or null
+  // user: { id, email, name, city } or null when logged out. Cached so the app opens instantly, then re-checked with the server.
+  const [user, setUser] = useState(() => (api.getToken() ? read(USER_KEY, null) : null));
+  const [keepThumbnails, setKeepThumbnails] = useState(() => read(KEEP_KEY, true));
+  const [sessionMessage, setSessionMessage] = useState(null);
+  const [sessionKey, setSessionKey] = useState(0);        // changes on every login, so screens can start fresh
+  const initialId = user?.id;
+  const [lastScan, setLastScan] = useState(() => (initialId ? read(userKey(initialId, 'lastScan'), null) : null));
+  const [thumbs, setThumbs] = useState(() => (initialId ? read(userKey(initialId, 'thumbs'), {}) : {}));
+  const [history, setHistory] = useState(null);
   const [historyError, setHistoryError] = useState(null);
   const [foodLog, setFoodLog] = useState([]);
   const [foodNames, setFoodNames] = useState([]);
+  const [plan, setPlan] = useState(null);       // PlanSummary from the server, or null until loaded
+  const [planError, setPlanError] = useState(null);
 
-  const setProfile = useCallback((p) => { setProfileState(p); write(PROFILE_KEY, p); }, []);
+  const uid = user?.id;
+
+  const resetData = useCallback(() => {
+    setLastScan(null); setThumbs({}); setHistory(null); setHistoryError(null);
+    setFoodLog([]); setPlan(null); setPlanError(null);
+  }, []);
+
+  const enterSession = useCallback((auth) => {
+    api.setToken(auth.access_token);
+    write(USER_KEY, auth.user);
+    resetData();
+    setLastScan(read(userKey(auth.user.id, 'lastScan'), null));
+    setThumbs(read(userKey(auth.user.id, 'thumbs'), {}));
+    setSessionMessage(null);
+    setSessionKey((k) => k + 1);
+    setUser(auth.user);
+  }, [resetData]);
+
+  const leaveSession = useCallback((message) => {
+    api.clearToken();
+    remove(USER_KEY);
+    resetData();
+    setSessionMessage(typeof message === 'string' ? message : null);
+    setUser(null);
+  }, [resetData]);
+
+  // The server says the login is no longer valid (expired, password changed on another device, account deleted).
+  useEffect(() => {
+    api.setUnauthorizedHandler(() => leaveSession('Your session ended. Please log in again.'));
+    return () => api.setUnauthorizedHandler(null);
+  }, [leaveSession]);
+
+  // Re-check the saved login once when the app opens. A network error keeps the cached user so the app still opens offline.
+  useEffect(() => {
+    if (!api.getToken()) return;
+    api.getMe().then((u) => { write(USER_KEY, u); setUser(u); }).catch(() => { /* handler logs out on 401 */ });
+  }, []);
 
   const refreshHistory = useCallback(async () => {
     try {
-      const h = await api.getHistory(60);
-      setHistory(h);
+      setHistory(await api.getHistory(60));
       setHistoryError(null);
     } catch (e) {
-      setHistoryError(e.message);
+      if (e.kind !== 'auth') setHistoryError(e.message);
     }
   }, []);
 
@@ -48,58 +90,130 @@ export function AppDataProvider({ children }) {
     try { setFoodLog(await api.getLog(7)); } catch { /* shown as empty */ }
   }, []);
 
+  const refreshPlan = useCallback(async () => {
+    try {
+      setPlan(await api.getPlan());
+      setPlanError(null);
+    } catch (e) {
+      if (e.kind !== 'auth') setPlanError(e.message);
+    }
+  }, []);
+
   const loadFoodNames = useCallback(async () => {
     try { setFoodNames(await api.getFoods()); } catch { /* picker stays empty */ }
   }, []);
 
   useEffect(() => {
-    if (profile?.consent) {
+    if (uid) {
       refreshHistory();
       refreshLog();
+      refreshPlan();
       loadFoodNames();
     }
-  }, [profile?.consent, refreshHistory, refreshLog, loadFoodNames]);
+  }, [uid, refreshHistory, refreshLog, refreshPlan, loadFoodNames]);
 
+  // ── Account actions ──
+  const signUp = useCallback(async ({ email, password, name, city, keep }) => {
+    const auth = await api.register({ email, password, name, city: city || null, accepted_terms: true });
+    setKeepThumbnails(keep);
+    write(KEEP_KEY, keep);
+    enterSession(auth);
+  }, [enterSession]);
+
+  const logIn = useCallback(async (email, password) => {
+    enterSession(await api.login(email, password));
+  }, [enterSession]);
+
+  const logOut = useCallback(() => leaveSession(), [leaveSession]);
+
+  const updateProfile = useCallback(async ({ name, city }) => {
+    const u = await api.updateMe(name, city);
+    write(USER_KEY, u);
+    setUser(u);
+  }, []);
+
+  const changePassword = useCallback(async (current, next) => {
+    const auth = await api.changePassword(current, next);
+    api.setToken(auth.access_token);       // the old token (and every other device's) no longer works
+  }, []);
+
+  const clearLocalFor = useCallback((id) => {
+    if (id) ['lastScan', 'thumbs'].forEach((n) => remove(userKey(id, n)));
+  }, []);
+
+  /** Deletes the account and everything stored for it, on the server and on this phone. */
+  const deleteAccount = useCallback(async (password) => {
+    const id = uid;
+    await api.deleteAccount(password);
+    clearLocalFor(id);
+    leaveSession();
+  }, [uid, clearLocalFor, leaveSession]);
+
+  /** Deletes scans, food log and plan for this account but keeps the account. */
+  const deleteMyData = useCallback(async () => {
+    await api.deleteMyData();
+    clearLocalFor(uid);
+    resetData();
+    refreshHistory(); refreshLog(); refreshPlan();
+  }, [uid, clearLocalFor, resetData, refreshHistory, refreshLog, refreshPlan]);
+
+  // ── Scan and food log ──
   /** Runs a scan on a photo Blob. Throws ApiError / Error with a readable message. */
   const runScan = useCallback(async (rawBlob) => {
     const prepared = await prepareImage(rawBlob);
-    const result = await api.scan(prepared, profile?.city || undefined);
+    const result = await api.scan(prepared, user?.city || undefined);
     setLastScan(result);
-    write(LAST_KEY, result);
-    if (profile?.keepThumbnails !== false) {
+    write(userKey(uid, 'lastScan'), result);
+    if (keepThumbnails !== false) {
       try {
         const t = await makeThumbnail(prepared);
         setThumbs((prev) => {
           const next = { ...prev, [result.scan.id]: t };
-          write(THUMBS_KEY, next);
+          write(userKey(uid, 'thumbs'), next);
           return next;
         });
       } catch { /* thumbnail is optional */ }
     }
     refreshHistory();
+    refreshPlan();
     return result;
-  }, [profile?.city, profile?.keepThumbnails, refreshHistory]);
+  }, [user?.city, uid, keepThumbnails, refreshHistory, refreshPlan]);
 
   const saveFoods = useCallback(async (foods) => {
     const saved = await api.saveLog(foods);
-    await refreshLog();
+    await Promise.all([refreshLog(), refreshPlan()]);
     return saved;
-  }, [refreshLog]);
+  }, [refreshLog, refreshPlan]);
 
-  const clearThumbs = useCallback(() => { setThumbs({}); remove(THUMBS_KEY); }, []);
+  const clearThumbs = useCallback(() => { setThumbs({}); remove(userKey(uid, 'thumbs')); }, [uid]);
 
-  /** Deletes server data for this device and everything stored on the phone. */
-  const deleteEverything = useCallback(async () => {
-    await api.deleteMyData();
-    ['twacha.profile', 'twacha.lastScan', 'twacha.thumbs'].forEach(remove);
-    setProfileState(null); setLastScan(null); setThumbs({}); setHistory(null); setFoodLog([]);
-  }, []);
+  // ── Plan ──
+  const addToPlan = useCallback(async (food, kind) => {
+    await api.addPlanItem(food, kind);
+    await refreshPlan();
+  }, [refreshPlan]);
+  const removeFromPlan = useCallback(async (id) => { await api.removePlanItem(id); await refreshPlan(); }, [refreshPlan]);
+  const setPlanTarget = useCallback(async (id, days) => { await api.setPlanTarget(id, days); await refreshPlan(); }, [refreshPlan]);
+  const tickFood = useCallback(async (food, done) => {
+    await api.checkPlanFood(food, done);
+    await Promise.all([refreshPlan(), refreshLog()]);
+  }, [refreshPlan, refreshLog]);
+
+  // Components read a simple "profile": the account's name and city plus the on-phone preference.
+  const profile = useMemo(
+    () => (user ? { name: user.name, city: user.city || '', email: user.email, keepThumbnails } : null),
+    [user, keepThumbnails]
+  );
 
   const value = useMemo(() => ({
-    profile, setProfile, lastScan, thumbs, history, historyError, foodLog, foodNames,
-    runScan, saveFoods, refreshHistory, clearThumbs, deleteEverything
-  }), [profile, setProfile, lastScan, thumbs, history, historyError, foodLog, foodNames,
-    runScan, saveFoods, refreshHistory, clearThumbs, deleteEverything]);
+    user, profile, sessionMessage, sessionKey, lastScan, thumbs, history, historyError, foodLog, foodNames, plan, planError,
+    signUp, logIn, logOut, updateProfile, changePassword, deleteAccount, deleteMyData,
+    runScan, saveFoods, refreshHistory, refreshPlan, clearThumbs,
+    addToPlan, removeFromPlan, setPlanTarget, tickFood
+  }), [user, profile, sessionMessage, sessionKey, lastScan, thumbs, history, historyError, foodLog, foodNames, plan, planError,
+    signUp, logIn, logOut, updateProfile, changePassword, deleteAccount, deleteMyData,
+    runScan, saveFoods, refreshHistory, refreshPlan, clearThumbs,
+    addToPlan, removeFromPlan, setPlanTarget, tickFood]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

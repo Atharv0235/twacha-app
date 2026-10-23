@@ -1,14 +1,17 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Home, Camera, TrendingUp, BookOpen, User, ArrowLeft } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Home, Camera, TrendingUp, BookOpen, User, ArrowLeft, Bell } from 'lucide-react';
 import { AppDataProvider, useAppData } from '../state/AppData';
 import { wake } from '../api/client';
 import Splash from './app/Splash';
-import Onboarding from './app/Onboarding';
+import AuthScreen from './app/AuthScreen';
 import HomeTab from './app/HomeTab';
 import ScanTab from './app/ScanTab';
 import TimelineTab from './app/TimelineTab';
 import DietTab from './app/DietTab';
 import AboutTab from './app/AboutTab';
+import NotificationModal from './app/NotificationModal';
+import { buildTimeline } from '../state/ScanTimeline';
+import { CartoonFlower, CartoonPetal } from './app/BotanicalDoodles';
 
 const MIN_SPLASH_MS = 1800;
 
@@ -28,7 +31,7 @@ function useIsMobileScreen() {
   return mobile;
 }
 
-function NavButton({ active, onClick, title, children }) {
+function NavButton({ active, onClick, title, children, badge = false }) {
   return (
     <button
       onClick={onClick}
@@ -37,22 +40,38 @@ function NavButton({ active, onClick, title, children }) {
       aria-current={active ? 'page' : undefined}
       style={{
         background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-        color: active ? '#ff6b00' : 'rgba(255, 255, 255, 0.6)', cursor: 'pointer', padding: '8px'
+        color: active ? '#ff6b00' : 'rgba(255, 255, 255, 0.65)', cursor: 'pointer', padding: '6px', position: 'relative'
       }}
     >
       {children}
+      {badge && (
+        <span style={{
+          position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px',
+          borderRadius: '50%', backgroundColor: '#ff6b00', border: '1.5px solid #19231c',
+          boxShadow: '0 0 6px rgba(255, 107, 0, 0.8)'
+        }} />
+      )}
     </button>
   );
 }
 
 function AppShell({ onOpenLegal, mobile }) {
-  const { profile } = useAppData();
+  const { user, sessionKey, history } = useAppData();
   const [ready, setReady] = useState(false);
   const [progress, setProgress] = useState(0);
   const [phaseText, setPhaseText] = useState('Starting up...');
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const [tab, setTab] = useState('home');
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+
+  // Compute pending scan reminder from timeline
+  const scans = history?.scans || [];
+  const timeline = useMemo(() => buildTimeline(scans), [scans]);
+  const hasPendingReminder = Boolean(timeline.nextScanDate);
+
+  // The selected tab belongs to one login session, so every new login starts on Home (derived, no effect needed).
+  const [tabState, setTabState] = useState({ session: 0, tab: 'home' });
+  const tab = tabState.session === sessionKey ? tabState.tab : 'home';
   const scroller = useRef(null);
 
   // Splash: the progress bar follows the real server wake-up (free hosting sleeps).
@@ -87,47 +106,54 @@ function AppShell({ onOpenLegal, mobile }) {
   }, [attempt, ready]);
 
   const go = useCallback((t) => {
-    setTab(t);
+    setTabState({ session: sessionKey, tab: t });
     if (scroller.current) scroller.current.scrollTop = 0;
-  }, []);
+  }, [sessionKey]);
 
   let screen;
   if (!ready) {
     screen = <Splash progress={Math.round(progress)} phaseText={phaseText} failed={failed}
       onRetry={() => setAttempt((a) => a + 1)} onContinue={() => setReady(true)} />;
-  } else if (!profile?.consent) {
-    screen = <Onboarding onOpenLegal={onOpenLegal} />;
+  } else if (!user) {
+    screen = <AuthScreen onOpenLegal={onOpenLegal} />;
   } else {
     screen = (
       <div style={{ flex: 1, backgroundColor: '#f6f5f1', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
         <div ref={scroller} style={{ flex: 1, overflowY: 'auto', paddingBottom: '96px' }}>
-          {tab === 'home' && <HomeTab go={go} />}
+          {tab === 'home' && <HomeTab go={go} onOpenNotif={() => setIsNotifOpen(true)} />}
           {tab === 'scan' && <ScanTab go={go} />}
           {tab === 'timeline' && <TimelineTab go={go} />}
           {tab === 'diet' && <DietTab go={go} />}
           {tab === 'about' && <AboutTab onOpenLegal={onOpenLegal} />}
         </div>
         <nav aria-label="Main" style={{
-          position: 'absolute', bottom: '12px', left: '14px', right: '14px', height: '62px', backgroundColor: '#19231c',
-          borderRadius: '32px', display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0 10px',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.25)'
+          position: 'absolute', bottom: '12px', left: '10px', right: '10px', height: '62px', backgroundColor: '#19231c',
+          borderRadius: '32px', display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0 6px',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.25)', zIndex: 50
         }}>
-          <NavButton active={tab === 'home'} onClick={() => go('home')} title="Home"><Home size={20} /></NavButton>
-          <NavButton active={tab === 'timeline'} onClick={() => go('timeline')} title="Progress"><TrendingUp size={20} /></NavButton>
+          <NavButton active={tab === 'home'} onClick={() => go('home')} title="Home"><Home size={19} /></NavButton>
+          <NavButton active={tab === 'timeline'} onClick={() => go('timeline')} title="Progress"><TrendingUp size={19} /></NavButton>
           <button
             onClick={() => go('scan')} title="Scan" aria-label="Scan"
             style={{
               width: '46px', height: '46px', borderRadius: '50%', backgroundColor: '#ff6b00', color: '#fff', border: '3px solid #19231c',
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-              boxShadow: '0 6px 18px rgba(255, 107, 0, 0.55)', transform: 'translateY(-10px)'
+              boxShadow: '0 6px 18px rgba(255, 107, 0, 0.55)', transform: 'translateY(-8px)'
             }}
           ><Camera size={21} /></button>
-          <NavButton active={tab === 'diet'} onClick={() => go('diet')} title="Diet and food log"><BookOpen size={20} /></NavButton>
-          <NavButton active={tab === 'about'} onClick={() => go('about')} title="About"><User size={20} /></NavButton>
+          <NavButton active={tab === 'diet'} onClick={() => go('diet')} title="Diet and plan"><BookOpen size={19} /></NavButton>
+          <NavButton active={isNotifOpen} onClick={() => setIsNotifOpen(true)} title="Scan Notifications" badge={hasPendingReminder}>
+            <Bell size={19} />
+          </NavButton>
+          <NavButton active={tab === 'about'} onClick={() => go('about')} title="About"><User size={19} /></NavButton>
         </nav>
+
+        {/* Next Scan Notification Modal */}
+        <NotificationModal isOpen={isNotifOpen} onClose={() => setIsNotifOpen(false)} go={go} />
       </div>
     );
   }
+
 
   return (
     <div style={{

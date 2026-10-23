@@ -1,188 +1,200 @@
-# Twacha (त्वचा) 🌿
-### AI Skin Pattern Investigation & Personalized Skin-Diet Prescription Platform
+# Twacha (त्वचा)
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
-[![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)](https://vitejs.dev)
-[![Capacitor](https://img.shields.io/badge/Capacitor-6-119EFF?logo=capacitor&logoColor=white)](https://capacitorjs.com)
-[![ONNX Runtime](https://img.shields.io/badge/ONNX-Runtime-005CED?logo=onnx&logoColor=white)](https://onnxruntime.ai)
-[![Python](https://img.shields.io/badge/Python-3.10%20|%203.11%20|%203.12%20|%203.13-3776AB?logo=python&logoColor=white)](https://www.python.org)
+A skin and diet wellness tracker prototype. Log in, take a face photo, and the app estimates acne severity and a few rough skin measures, adds local air quality, and suggests Indian foods to try, with an honest evidence note for each one. You can add foods to **My plan**, tick them off each day, and see how your week is going next to your scan trend.
 
-> **Twacha** investigates a user's unique facial skin pattern and physiological characteristics through computer vision and clinical assessment, automatically prescribing a targeted, personalized dietary nutrition plan combined with natural homemade botanical remedies to heal the skin from within.
+> **Prototype for a university project. Not a medical device and not a diagnosis.** Results are experimental estimates.
 
 ---
 
-## 💡 How Twacha Works
+## What it does
 
-```
- ┌────────────────────────┐      ┌────────────────────────┐      ┌─────────────────────────┐
- │   1. INVESTIGATION     │      │   2. SKIN PATTERN      │      │    3. TAILORED DIET     │
- │  AI Face Mesh Scan &   │ ───► │   Analysis & Dosha     │ ───► │  Targeted Nutritional   │
- │  Skin Pattern Analysis │      │   Phototype Mapping    │      │  Plan & Botanical Care  │
- └────────────────────────┘      └────────────────────────┘      └─────────────────────────┘
-```
+| Feature | Status |
+| --- | --- |
+| Accounts: sign up and log in with email and password, one private set of data per user | Working. No email verification and no "forgot password" yet |
+| Acne score (0 to 10) from a face photo (MobileNetV2 trained on ACNE04, run with ONNX) | Working, limited accuracy (see Limitations) |
+| Photo checks: face found, enough light, not blurry; clear error messages | Working |
+| Beard handling: scores forehead and cheeks only and tells the user | Working (heuristic) |
+| Redness, dryness, skin tone (ITA) from simple colour measures | Working, uncalibrated, labelled experimental |
+| Air quality by city from WAQI, labelled `live`, `demo` or `unavailable`; never invented | Working with a WAQI token |
+| Nutrient suggestions scored from the skin values, boosted for antioxidants when air is poor | Working, placeholder weights |
+| Indian food suggestions (add / reduce) with INDB nutrient values where available | Working |
+| Evidence tier and source note on every suggestion (none labelled "clinical") | Working |
+| Food log that personalises suggestions (foods logged in the last 3 days are not offered as new) | Working |
+| **My plan**: add foods from a result ("try" or "eat less"), weekly goals, tick "ate today", logging streak, weekly summary | Working |
+| Scan history, program day (day X of 30) and acne trend | Working |
+| Photos processed in memory and never stored | Working |
+| Delete scans and logs, or delete the whole account | Working |
+| Web app and Android app (React + Capacitor) wired to the API | Working in tests with a headless browser; **not yet tested on a real Android phone** |
+| Push reminders, email verification, password reset, iOS build | Not built |
 
-1. **Investigate Skin Pattern**: The user scans their skin using the interactive diagnostic camera. Twacha examines texture, barrier integrity, erythema (redness), pore congestion, and hydration levels calibrated for Indian skin tones (Fitzpatrick III–VI).
-2. **Diagnose & Correlate**: Correlates the skin condition with internal nutrient deficiencies, gut-skin axis health, and dosha balance (Vata / Pitta / Kapha).
-3. **Prescribe Personalized Diet**: Recommends exact whole-food nutrition mapped to their skin pattern (e.g., Barnyard Millets for low-glycemic oil control, Moong Dal for tissue repair, Pumpkin Seeds for bio-zinc & barrier strength, Amla for collagen synthesis).
-4. **Complement with Natural Skincare**: Pairs the internal diet with clean, homemade topical remedies (Honey & Clay masks, Chamomile & Aloe mists, Rose Water).
-5. **Track Progression Over Time**: Visual timeline tracks skin improvement across 3–4 day check-in intervals with comparative photos and health scores.
+## App screens
 
----
+The React + Capacitor app (also shown on the website at `?mode=app`) talks to the backend:
 
-## 📁 Repository Structure
+- **Splash:** animated start screen. Its progress bar follows the real server wake-up (free hosting sleeps).
+- **Sign up / log in:** email, password, first name, optional city, consent. The login is kept on the phone until you log out.
+- **Home:** day X of 30, latest scan, **today's plan** (tick foods you ate), air-quality card (hidden when unavailable, tagged when it is a demo value).
+- **Scan:** take or choose a photo, or use the live camera. The photo is resized on the phone and sent to `POST /api/scan/`. Shows scores, quality notes, foods to try with an evidence note and a **+ Plan** button. Bad photos show a readable message.
+- **Progress:** acne-score chart and a list of scans. Small photo previews are kept on the phone only and can be deleted.
+- **Diet and plan:** **My plan** (weekly goals, seven-day dots, goal stepper), food ideas, a food log, and general skin-care habits.
+- **About:** your account, change password, log out, limitations, credits, and delete options.
 
-```
-├── backend/                  # FastAPI REST API & Computer Vision inference engine
-│   ├── alembic/              # Database schema migrations
-│   ├── app/                  # Application core, CV pipeline, and recommendation engine
-│   │   ├── routers/          # REST route handlers (/api/scan, /api/history, /api/log)
-│   │   ├── cv_pipeline.py    # Face detection, quality checks, and ONNX model pipeline
-│   │   ├── classical_cv.py   # Redness, dryness, and ITA skin tone estimators
-│   │   └── recommender.py    # Targeted nutritional prescription logic
-│   ├── ml/                   # Production ONNX MobileNetV2 acne grading model
-│   ├── tests/                # Test suite with mock & real photo validation
-│   ├── requirements.txt      # Production Python dependencies
-│   └── start_server.ps1      # Quickstart server script
-│
-├── frontend/                 # User interface & native mobile wrapper
-│   └── web/                  # React 18, Vite, Vanilla CSS design system & Capacitor
-│       ├── android/          # Native Android Studio project & Gradle configuration
-│       ├── src/              # React components, diagnostic camera, timeline & state
-│       ├── package.json      # Node.js dependencies & scripts
-│       └── capacitor.config.json # Capacitor mobile runtime configuration
-│
-├── notebooks/                # PyTorch & ONNX training & evaluation notebooks
-│   ├── twacha_acne_training.ipynb
-│   └── twacha_acne_training_v2.ipynb
-│
-├── docs/                     # Architecture blueprints, research papers & presentation
-│   ├── Skin_Dietary_Wellness_Tracker_Final_Blueprint.md
-│   ├── Twacha_Backend_Implementation_Plan.md
-│   ├── Twacha_Frontend_Implementation_Plan.md
-│   └── Twacha_Master_Implementation_Plan.md
-│
-├── netlify.toml              # Continuous deployment configuration for web
-└── README.md                 # Project overview and run guide
+## How it works
+
+```text
+App (React + Capacitor)  --HTTPS + login token-->  FastAPI backend  -->  Photo checks -> ONNX acne model + colour estimates
+                                                        |                              -> Recommender (nutrients, foods, evidence)
+                                                        |--> WAQI (air quality)
+                                                        '--> Database (SQLite for development, Postgres for hosting)
 ```
 
----
+The app is a thin client. All scoring runs on the server. Every data endpoint needs a login, and every query is filtered by the logged-in user.
 
-## 🚀 Quickstart Guide
+## Tech stack
 
-### 1. Setting Up and Running the Backend
+- **Backend:** Python, FastAPI, SQLAlchemy, SQLite or Postgres, Alembic migrations, bcrypt + JWT for accounts
+- **Computer vision:** OpenCV (face detection, colour measures), ONNX Runtime, MobileNetV2 fine-tuned on ACNE04 (trained in Colab; notebooks in `notebooks/`)
+- **Data:** WAQI air-quality API, Indian Nutrient Databank (INDB) values, ACNE04 for training
+- **App:** React 19, Vite 8, Capacitor 8 (Android), custom CSS design system
 
-#### Prerequisites
-- Python 3.10 to 3.13 installed
-- Git
+## Repository structure
 
-#### Installation
+```text
+├── backend/                  # FastAPI service
+│   ├── app/
+│   │   ├── main.py           # app, CORS, /health, demo endpoints
+│   │   ├── auth.py           # password hashing, tokens, login throttle
+│   │   ├── routers/accounts.py  # register, login, profile, change password, delete account
+│   │   ├── routers/scans.py     # /api/scan, /api/history, /api/log, /api/foods, /api/data
+│   │   ├── routers/plan.py      # /api/plan (my plan, daily ticks, weekly summary)
+│   │   ├── cv_pipeline.py    # photo checks, face crop, ONNX acne model
+│   │   ├── classical_cv.py   # redness, dryness, skin tone estimates
+│   │   ├── recommender.py    # nutrient scoring (placeholder weights)
+│   │   ├── nutrient_lookup.py# Indian food table and matching
+│   │   ├── evidence.py       # evidence tiers and source notes
+│   │   └── aqi_client.py     # WAQI client with honest fallbacks
+│   ├── alembic/              # database migrations
+│   ├── ml/twacha_acne_model.onnx
+│   ├── tests/
+│   └── requirements.txt
+├── frontend/web/             # React + Vite + Capacitor app (android/ inside)
+├── notebooks/                # model training notebooks
+├── docs/                     # planning documents (some are out of date)
+├── netlify.toml
+└── README.md
+```
+
+## Getting started
+
+### Backend
+
 ```bash
-# 1. Navigate to the backend directory
 cd backend
-
-# 2. (Optional) Create and activate a virtual environment
-python -m venv venv
-# On Windows:
-.\venv\Scripts\activate
-# On Linux/macOS:
-source venv/bin/activate
-
-# 3. Install dependencies
 pip install -r requirements.txt
-
-# 4. Start the backend server
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+export JWT_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"   # Windows PowerShell: see backend/README.md
+uvicorn app.main:app --reload --host 0.0.0.0
+# open http://localhost:8000/docs
 ```
 
-The backend is now live:
-- **Interactive OpenAPI Docs**: `http://localhost:8000/docs`
-- **Health Check**: `http://localhost:8000/health`
-
----
-
-### 2. Setting Up and Running the Frontend (Web)
+Tests:
 
 ```bash
-# 1. Navigate to the frontend web directory
-cd frontend/web
+pip install -r requirements-dev.txt
+pytest -q
+TWACHA_PHOTOS=/folder/with/face/photos pytest -q                         # also runs real photos
+TWACHA_TEST_DATABASE_URL=postgresql://user:pw@localhost/emptydb pytest -q  # same tests on Postgres
+```
 
-# 2. Install dependencies
+### App
+
+```bash
+cd frontend/web
 npm install
-
-# 3. Configure backend URL (optional - defaults to http://localhost:8000)
-cp .env.example .env
-
-# 4. Start the Vite development server
-npm run dev
+cp .env.example .env     # VITE_API_BASE_URL=http://localhost:8000
+npm run dev              # http://localhost:5173/  (add ?mode=app for the phone view)
 ```
 
-- Open `http://localhost:5173/` for the editorial desktop/tablet experience.
-- Open `http://localhost:5173/?mode=app` for direct mobile interface simulation.
+Android build:
 
----
-
-### 3. Running on a Physical Android Phone
-
-#### Option A: Direct APK Installation (Fastest)
-1. Install `app-debug.apk` directly on your Android phone.
-2. If connecting to a local backend, launch an **ngrok** tunnel:
-   ```bash
-   ngrok http 8000
-   ```
-3. Set your public ngrok URL in `frontend/web/.env` before building:
-   ```env
-   VITE_API_BASE_URL=https://your-tunnel.ngrok-free.dev
-   ```
-
-#### Option B: Build from Source
 ```bash
 cd frontend/web
-
-# Build the web bundle
 npm run build
-
-# Sync with the Android Capacitor project
 npx cap sync android
-
-# Build the debug APK via Gradle
-cd android
-./gradlew assembleDebug
-
-# Install onto your connected Android device via ADB
+cd android && ./gradlew assembleDebug        # Windows: gradlew.bat assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
----
+Requires Node 22 or newer (the Capacitor CLI needs it). For the APK you also need Android Studio (SDK 36) and Java 21.
 
-## 🔬 Computer Vision & ML Pipeline
+## API
 
-| Component | Architecture / Method | Output |
-|---|---|---|
-| **Face Localization** | Multi-scale Haar cascades with margin padding & border replication | Tight bounding box `(x, y, w, h)` |
-| **Image Quality** | Laplacian variance & mean luminance filtering | Sharpness & brightness validation |
-| **Acne Assessment** | ONNX MobileNetV2 (RGB 224×224 normalized, anchor-weighted logits) | Continuous score `0.0 – 10.0` |
-| **Erythema (Redness)** | Normalized red-chroma excess in Lab/YCrCb color space | Continuous score `0.0 – 10.0` |
-| **Hydration / Dryness** | High-frequency gray-level co-occurrence & micro-texture variance | Continuous score `0.0 – 10.0` |
-| **Skin Tone (ITA)** | Individual Typology Angle ($ITA^\circ = \arctan((L - 50)/b) \times 180/\pi$) | Calibrated Fitzpatrick scale |
+Send `Authorization: Bearer <token>` on everything except `/health`, `/api/foods/` and the two auth calls.
 
-> **Privacy by Design**: Images are decoded and analyzed purely in volatile memory. No raw user photo is ever written to disk or stored in the database.
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/auth/register` | `{email, password (8 to 72 chars), name, city?, accepted_terms: true}` returns a token and the user |
+| POST | `/api/auth/login` | `{email, password}` returns a token and the user |
+| GET / PUT | `/api/me` | read or change your name and city |
+| POST | `/api/auth/change-password` | `{current_password, new_password}`; logs out other devices |
+| POST | `/api/me/delete` | `{password}`; deletes the account and all its data |
+| POST | `/api/scan/` | multipart: `image` (required), `city` (optional). Returns scores, air quality, recommendations, `quality_notes` |
+| GET | `/api/history/?limit=30` | past scans and program day |
+| POST / GET | `/api/log/` | save one day's foods (replaces that day) / list recent days |
+| GET | `/api/foods/` | food names for the log picker |
+| GET | `/api/plan/summary?today=YYYY-MM-DD` | plan items with weekly progress, goals met, logging streak, scan change |
+| POST | `/api/plan/` | `{food, kind: "try"\|"limit", target_days?}` add a food (max 12) |
+| PUT / DELETE | `/api/plan/{id}` | change the weekly goal / remove |
+| POST | `/api/plan/check` | `{food, done, log_date?}` tick or untick a food for a day (edits the food log) |
+| DELETE | `/api/data/` | deletes your scans, logs and plan; keeps the account |
+| GET | `/health` | liveness and whether the acne model is loaded |
+| POST | `/demo/seed`, `/demo/reset` | only when `ENABLE_DEMO=1`; synthetic history for the logged-in user |
 
----
+Errors: `401` not logged in or wrong password; `409` email already registered; `422` with a readable `detail`; `429` too many wrong passwords (15 minute wait); `413` above 10 MB.
 
-## 📡 REST API Reference
+### Environment variables
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/scan/` | Uploads face photo (`image`) + optional `city`. Returns CV scores, AQI data, and nutrient targets. |
-| `GET` | `/api/history/` | Returns past scan history and progressive 30-day program day number. |
-| `POST` | `/api/log/` | Logs consumed foods for dietary correlation (`{"foods_eaten": [...]}`). |
-| `GET` | `/api/log/` | Retrieves recent dietary logs (last 7 days). |
-| `GET` | `/api/foods/` | Returns verified Indian whole-food names for the dietary log picker. |
-| `GET` | `/health` | Server liveness check and ONNX model status verification. |
-| `DELETE`| `/api/data/` | Full GDPR-compliant data wipe for the calling anonymous device ID. |
+| Variable | Meaning |
+| --- | --- |
+| `JWT_SECRET_KEY` | **required in production**, at least 32 random characters. Without it a random key is made at start-up and everyone is logged out on each restart |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | login lifetime, default `10080` (7 days) |
+| `DATABASE_URL` | default `sqlite:///./twacha.db`. For hosting use Postgres (see below) |
+| `WAQI_TOKEN` | free token from aqicn.org; without it air quality is `unavailable` |
+| `DEFAULT_CITY` | city when the app sends none (default `bhopal`) |
+| `DEMO_AQI` | fixed AQI used only when live data fails; response is labelled `demo` |
+| `ENABLE_DEMO` | `1` to enable `/demo/*` |
+| `CORS_ORIGINS` | comma-separated origins (default `*`) |
+| `BCRYPT_ROUNDS`, `LOGIN_MAX_FAILURES` | tuning (defaults 12 and 8) |
 
----
+Render start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 
-## 🛡️ Clinical Disclaimer
-Twacha is an experimental health-tech wellness platform designed for educational and wellness tracking purposes. The estimates provided for acne severity, erythema, and skin hydration are algorithmic assessments and do not constitute formal medical diagnosis. For acute dermatological conditions, consult a certified dermatologist.
+### Database
+
+- **Development:** SQLite file (`twacha.db`). Fine on your own computer.
+- **Hosting:** use Postgres, because accounts are stored in the database. Render's free web service has a disk that is wiped on every redeploy and restart, which would delete every account.
+- Set `DATABASE_URL` to the provider's connection string. `postgres://` and `postgresql://` both work; the app picks the `psycopg2` driver.
+- Tables are created at start-up. `alembic upgrade head` is also safe on an empty database, on one an older version created, or on one the app already created (all three were tested on SQLite and Postgres).
+- Free-tier terms checked on 15 Oct 2026 (re-check before you rely on them): Render Postgres free expires 30 days after creation (1 GB); Neon free is permanent, 1 GB, and sleeps after 5 idle minutes; Supabase free pauses after 1 week of inactivity (500 MB).
+
+## Limitations (read before trusting any number)
+
+- **Acne model:** macro-F1 0.60 and 61% accuracy on only 56 test images (about 0.07 noise); 96% of predictions are within one grade. It was trained on clinic photos, mostly East Asian, so frontal selfies, darker skin tones, beards and moles can give wrong scores. It has not been validated across Fitzpatrick skin types.
+- **Redness, dryness, skin tone:** simple colour and texture measures, not calibrated against any reference. Skin tone is stored but not used for any advice.
+- **Nutrient weights** are placeholders chosen by the team, not taken from the cited papers. Evidence for diet and acne is mixed; suggestions are things to try, not treatment.
+- **My plan only counts what you tick or log.** Change in score between scans can come from lighting and photo quality, so the app never claims the plan caused it.
+- **Accounts:** no email verification, so an email address is not proven to belong to the person. No "forgot password": a user who forgets it must register again. The login token is kept in the phone's local storage.
+- **Lighting and camera** change scores. Use daylight and a neutral face.
+- **Free hosting** sleeps after inactivity; the first request can take about a minute.
+- **Demo history** from `/demo/seed` is synthetic.
+
+## Privacy
+
+Photos are sent to the server over HTTPS, analysed in memory and discarded. The server stores: email, first name, optional city, a bcrypt hash of the password, scan scores, food logs and plan. Optional small photo previews and the login token stay on the phone. Users can delete their scans and logs, or the whole account, from the About screen. Photo collection for model improvement uses a consent form, adults only, coded IDs, private storage, a deletion date and a 7-day withdrawal window.
+
+## Data and attribution
+
+- Air quality data: World Air Quality Index Project, aqicn.org (attribution must be shown wherever AQI is displayed).
+- ACNE04 dataset for training; INDB for nutrient values. Check each dataset's licence before redistributing.
+
+## License
+
+MIT License.

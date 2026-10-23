@@ -7,7 +7,7 @@ from sqlalchemy import pool
 from alembic import context
 
 # Import the app's models so Alembic can detect them for autogenerate
-from app.database import Base
+from app.database import Base, DATABASE_URL   # DATABASE_URL is already normalised (postgres:// -> postgresql+psycopg2://)
 from app import models  # noqa: F401 — registers all models with Base.metadata
 
 # this is the Alembic Config object, which provides
@@ -15,12 +15,8 @@ from app import models  # noqa: F401 — registers all models with Base.metadata
 config = context.config
 
 # Override sqlalchemy.url from environment if DATABASE_URL is set
-database_url = os.getenv("DATABASE_URL")
-if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
-
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
+# "%" must be doubled because Alembic treats the URL as an ini value
+config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 

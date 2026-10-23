@@ -16,7 +16,7 @@ export default function App() {
     !!window.Capacitor ||
     window.location.protocol === 'capacitor:'
   );
-  const [viewMode, setViewMode] = useState(isMobileDevice ? 'app' : 'web'); // 'web' | 'app'
+  const [viewMode, setViewMode] = useState('app'); // Always open the app simulator first — 'web' | 'app'
   const [isScanOpen, setIsScanOpen] = useState(false);
 
   const navigate = (view) => {
@@ -44,7 +44,8 @@ export default function App() {
         )}
       </main>
       <Footer onNavigate={navigate} />
-      <ScanStudioModal isOpen={isScanOpen} onClose={() => setIsScanOpen(false)} />
+      <ScanStudioModal isOpen={isScanOpen} onClose={() => setIsScanOpen(false)}
+        onOpenLegal={(view) => { setIsScanOpen(false); navigate(view); }} />
     </div>
   );
 }

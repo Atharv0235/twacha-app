@@ -35,13 +35,22 @@ The manifest asks for camera permission. The scan screen uses a file input with 
 
 ```text
 src/
-  api/client.js         fetch wrapper, X-Device-Id, error messages, wake-up call
+  api/client.js         fetch wrapper, login token, readable error messages, wake-up call, local-date helper
   api/image.js          resize and re-encode photos (drops EXIF), small on-phone thumbnails
-  state/AppData.jsx     profile, latest result, history, food log (localStorage + API)
-  config.js             team, contact, disclaimer text
-  components/           website (Navbar, Landing, Footer, Privacy, Terms, ScanStudioModal)
-  components/PhoneSimulator.jsx   app shell: splash -> onboarding -> tabs
-  components/app/       Splash, Onboarding, Home/Scan/Timeline/Diet/About tabs, ScanCapture, ScanResult
+  state/AppData.jsx     login session, latest result, history, food log, plan (localStorage + API)
+  config.js             API URL, team names, contact email, disclaimer text
+  components/
+    PhoneSimulator.jsx  app shell: splash, sign up / log in, tabs
+    app/AuthScreen.jsx  sign up and log in
+    app/HomeTab.jsx     day X of 30, latest scan, today's plan, air quality
+    app/ScanTab.jsx, ScanCapture.jsx, ScanResult.jsx   take a photo, see scores and foods, "+ Plan"
+    app/Plan.jsx        today's checklist, plan manager, "+ Plan" button
+    app/TimelineTab.jsx, LineChart.jsx                 history and acne chart
+    app/DietTab.jsx     My plan, ideas, food log, skin-care habits
+    app/AboutTab.jsx    account, change password, limitations, delete options
+    Landing.jsx, Navbar.jsx, Footer.jsx, ScanStudioModal.jsx, PrivacyPolicy.jsx, TermsConditions.jsx   the website
 ```
 
-Rules: never show invented data; keep the disclaimer on result screens; show the WAQI credit next to air quality; label redness and dryness as rough estimates.
+## Accounts on the phone
+
+The login token is saved in local storage (`twacha.token`). What stays on the phone (latest result, photo previews) is stored per account, so two people sharing a phone never see each other's. If the server rejects the token (expired, password changed elsewhere, account deleted) the app logs out and says why.

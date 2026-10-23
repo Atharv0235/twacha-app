@@ -131,3 +131,153 @@ class DietaryLogOut(BaseModel):
     id:          int
     log_date:    date
     foods_eaten: List[str]
+
+
+# ── Accounts ────────────────────────────────────────────────────────────────
+
+import re as _re
+from typing import Literal
+from pydantic import Field
+
+_EMAIL_RE = _re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _clean_email(v: str) -> str:
+    v = (v or "").strip().lower()
+    if len(v) > 254 or not _EMAIL_RE.match(v):
+        raise ValueError("Enter a valid email address.")
+    return v
+
+
+def _check_password(v: str) -> str:
+    if len(v) < 8 or len(v.encode("utf-8")) > 72:
+        raise ValueError("Password must be 8 to 72 characters long.")
+    return v
+
+
+class RegisterIn(BaseModel):
+    email: str
+    password: str
+    name: str
+    city: Optional[str] = None
+    accepted_terms: bool = False
+
+    _email = field_validator("email")(_clean_email)
+    _pw = field_validator("password")(_check_password)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v):
+        v = (v or "").strip()
+        if not 1 <= len(v) <= 40:
+            raise ValueError("Enter your first name (up to 40 characters).")
+        return v
+
+    @field_validator("city")
+    @classmethod
+    def _city(cls, v):
+        v = (v or "").strip()
+        if len(v) > 60:
+            raise ValueError("City name is too long.")
+        return v or None
+
+
+class LoginIn(BaseModel):
+    email: str
+    password: str = Field(max_length=200)
+
+    _email = field_validator("email")(_clean_email)
+
+
+class ProfileIn(BaseModel):
+    name: str
+    city: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v):
+        v = (v or "").strip()
+        if not 1 <= len(v) <= 40:
+            raise ValueError("Enter your first name (up to 40 characters).")
+        return v
+
+    @field_validator("city")
+    @classmethod
+    def _city(cls, v):
+        v = (v or "").strip()
+        if len(v) > 60:
+            raise ValueError("City name is too long.")
+        return v or None
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(max_length=200)
+    new_password: str
+
+    _pw = field_validator("new_password")(_check_password)
+
+
+class DeleteAccountIn(BaseModel):
+    password: str = Field(max_length=200)
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id:    int
+    email: str
+    name:  str
+    city:  Optional[str] = None
+
+
+class AuthOut(BaseModel):
+    access_token: str
+    token_type:   str = "bearer"
+    user:         UserOut
+
+
+# ── Plan (foods the user chose to follow) ───────────────────────────────────
+
+class PlanItemIn(BaseModel):
+    food:        str
+    kind:        Literal["try", "limit"]
+    target_days: Optional[int] = None       # defaults: try 4, limit 2 (days out of the last 7)
+
+
+class PlanTargetIn(BaseModel):
+    target_days: int
+
+
+class PlanCheckIn(BaseModel):
+    food:  str
+    done:  bool
+    log_date: Optional[date] = None         # defaults to today
+
+
+class PlanItemStatus(BaseModel):
+    id:           int
+    food:         str
+    kind:         Literal["try", "limit"]
+    target_days:  int
+    days_eaten:   int                       # of the last 7 days
+    met:          bool
+    eaten_today:  bool
+    last_7:       List[bool]                # oldest first, last entry is today
+
+
+class ScanChange(BaseModel):
+    from_score: float
+    to_score:   float
+    days:       int
+    scans:      int
+
+
+class PlanSummary(BaseModel):
+    today:          date
+    items:          List[PlanItemStatus]
+    goals_met:      int
+    goals_total:    int
+    logging_streak: int                     # consecutive days with something logged, ending today or yesterday
+    scan_change:    Optional[ScanChange] = None
+    max_items:      int
+    note:           str = ("Changes in score can come from lighting and photo quality, so this does not show "
+                           "that the plan caused them.")

@@ -198,6 +198,20 @@ def _matches(logged: str, food_name: str) -> bool:
     return False
 
 
+def food_matches(logged: str, food_name: str) -> bool:
+    """Public wrapper: does a logged food string (any case) mean this canonical food?"""
+    return _matches(_norm(logged or ""), food_name)
+
+
+def canonical_food(name: str) -> Optional[str]:
+    """Exact (case-insensitive) match against the canonical list, or None."""
+    wanted = (name or "").strip().lower()
+    for n in all_food_names():
+        if n.lower() == wanted:
+            return n
+    return None
+
+
 def all_food_names() -> list[str]:
     """Canonical names for the app's food-log picker, so logs match exactly."""
     names = []

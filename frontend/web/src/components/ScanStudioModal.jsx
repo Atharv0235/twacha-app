@@ -2,16 +2,13 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { AppDataProvider, useAppData } from '../state/AppData';
 import ScanCapture from './app/ScanCapture';
+import AuthScreen from './app/AuthScreen';
 import ScanResult from './app/ScanResult';
 import { DISCLAIMER } from '../config';
 
-function Body({ onClose }) {
-  const { profile, setProfile } = useAppData();
+function Body({ onClose, onOpenLegal }) {
+  const { user } = useAppData();
   const [result, setResult] = useState(null);
-  const [city, setCity] = useState(profile?.city || '');
-  const [consent, setConsent] = useState(!!profile?.consent);
-
-  const start = () => setProfile({ name: profile?.name || 'Guest', city: city.trim(), keepThumbnails: true, consent: true });
 
   return (
     <div style={{
@@ -32,22 +29,8 @@ function Body({ onClose }) {
           </button>
         </div>
         <div style={{ padding: '24px 28px 32px' }}>
-          {!profile?.consent ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '14px', lineHeight: 1.6 }}>
-              <p style={{ color: 'rgba(255,255,255,0.8)' }}>
-                Your photo is sent to the Twacha server for analysis and is not saved there. Your scores are stored under an anonymous ID.
-              </p>
-              <label style={{ fontSize: '12px' }}>
-                City for air quality (optional)
-                <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Delhi"
-                  style={{ display: 'block', width: '100%', marginTop: '6px', padding: '11px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.06)', color: '#fff' }} />
-              </label>
-              <label style={{ display: 'flex', gap: '10px', fontSize: '13px' }}>
-                <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ marginTop: '3px' }} />
-                <span>I understand and agree. This is not medical advice.</span>
-              </label>
-              <button className="btn-lime-pill" disabled={!consent} onClick={start} style={{ opacity: consent ? 1 : 0.5, alignSelf: 'flex-start' }}>Continue</button>
-            </div>
+          {!user ? (
+            <AuthScreen embedded onOpenLegal={onOpenLegal} />
           ) : result ? (
             <>
               <ScanResult result={result} theme="dark" />
@@ -62,11 +45,11 @@ function Body({ onClose }) {
   );
 }
 
-export default function ScanStudioModal({ isOpen, onClose }) {
+export default function ScanStudioModal({ isOpen, onClose, onOpenLegal }) {
   if (!isOpen) return null;
   return (
     <AppDataProvider>
-      <Body onClose={onClose} />
+      <Body onClose={onClose} onOpenLegal={onOpenLegal} />
     </AppDataProvider>
   );
 }

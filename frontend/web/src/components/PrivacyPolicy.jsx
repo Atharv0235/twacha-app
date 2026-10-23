@@ -23,17 +23,18 @@ export default function PrivacyPolicy({ onBack }) {
         {
           heading: 'What we store on the server',
           bullets: [
+            'Your account: email address, first name, city (optional), when you accepted this policy, and a scrambled (bcrypt) version of your password. We never store the password itself and cannot read it.',
             'Your scan scores (acne, redness, dryness, a skin-tone value), the date, and the air-quality reading for your city at that time.',
-            'The foods you log.',
-            'An anonymous random ID created on your phone, which links these records together. We do not ask for your name, email or phone number, and the name you type in the app stays on your phone.'
+            'The foods you log, and the foods you add to your plan with your weekly goals.',
+            'We do not ask for your phone number, address or date of birth.'
           ]
         },
         {
           heading: 'What stays on your phone',
           bullets: [
-            'Your first name and city.',
-            'Your latest result, so the app can show it without asking the server again.',
-            'Small preview thumbnails of your photos for your timeline, if you chose to keep them. You can delete them from the Progress screen.'
+            'A login token, so you do not have to type your password every time. Logging out removes it.',
+            'Your latest full result, so the app can show it without asking the server again.',
+            'Small preview thumbnails of your photos for your timeline, if you chose to keep them. You can delete them from the Progress screen. They are kept per account on this phone.'
           ]
         },
         {
@@ -45,7 +46,14 @@ export default function PrivacyPolicy({ onBack }) {
         {
           heading: 'Deleting your data',
           paragraphs: [
-            'Open About, then "Delete all my data". This removes your scores and food log from the server and clears everything stored on your phone. If you lose your phone or reinstall the app, the old anonymous ID is lost and we cannot find or delete those old records for you; ask the team and we will remove old demo data by hand where possible.'
+            'Open About, then "Delete my account" (it asks for your password). This removes your account, scores, food log and plan from the server and clears everything stored on your phone. "Delete scans and logs" clears the same data but keeps your account.',
+            'There is no "forgot password" yet. If you forget your password and ask us to remove your data, we will need a way to confirm it is you.'
+          ]
+        },
+        {
+          heading: 'Security',
+          paragraphs: [
+            'Data travels over HTTPS and passwords are stored only as bcrypt hashes. Repeated wrong passwords are slowed down. We do not verify email addresses, and this is a student project that has not been security-audited, so please do not reuse a password from an important account.'
           ]
         },
         {

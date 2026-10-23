@@ -2,6 +2,9 @@ import React from 'react';
 import { AlertCircle, Wind } from 'lucide-react';
 import { THEMES, cardStyle, scoreColor, scoreWord, GOOD, WARN } from './ui';
 import { DISCLAIMER, WAQI_CREDIT } from '../../config';
+import { PlanButton } from './Plan';
+import { useAppData } from '../../state/AppData';
+import { buildTimeline, comparisonSummary, metricDeltaLabel, reminderMessage, drynessToHydration } from '../../state/ScanTimeline';
 
 function ScoreRow({ t, label, note, value }) {
   const pct = Math.max(0, Math.min(100, (value / 10) * 100));
@@ -34,11 +37,34 @@ const TREND_TEXT = {
   insufficient_data: 'Not enough scans yet to show a trend (needs at least 3 earlier scans).'
 };
 
+function DeltaChip({ diff, label }) {
+  const { text, color } = metricDeltaLabel(diff);
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+      <span style={{ fontSize: '12px', color: '#5e6d64' }}>{label}</span>
+      <span style={{ fontSize: '10px', fontWeight: '700', color, backgroundColor: color + '18', padding: '2px 8px', borderRadius: '99px' }}>{text}</span>
+    </div>
+  );
+}
+
 export default function ScanResult({ result, theme = 'light' }) {
   const t = THEMES[theme];
   const { scan, environment, recommendations = [], quality_notes = [] } = result;
   const showAqi = environment && environment.source !== 'unavailable';
   const trend = recommendations[0]?.trend;
+
+  // Get history for comparison
+  const { history } = useAppData();
+  const scans = history?.scans || [];
+  const timeline = buildTimeline(scans);
+  const thisEntry = timeline.scansWithDelta.find(e => e.scan.id === scan.id);
+  const prevEntry = thisEntry && !thisEntry.isFirst
+    ? timeline.scansWithDelta[timeline.scansWithDelta.indexOf(thisEntry) - 1]
+    : null;
+  const delta = thisEntry?.delta || null;
+  const comparison = thisEntry?.comparison || 'baseline';
+  const { emoji, word, color: compColor } = comparisonSummary(comparison);
+  const nextScanMsg = reminderMessage(timeline);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', color: t.text }}>
@@ -51,15 +77,48 @@ export default function ScanResult({ result, theme = 'light' }) {
         </div>
       )}
 
+      {/* Journey day + next scan hint */}
+      {timeline.firstScanDate && (
+        <div style={{ ...cardStyle(t), padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontWeight: '800', fontSize: '13px', color: t.text }}>Day {thisEntry?.dayNumber || scan.day_number} of 30</div>
+            <div style={{ fontSize: '11px', color: t.muted, marginTop: '1px' }}>{timeline.daysRemaining} days remaining in journey</div>
+          </div>
+          {nextScanMsg && (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '10px', color: t.muted }}>{nextScanMsg.title}</div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={cardStyle(t)}>
         <div style={{ fontSize: '12px', color: t.faint, marginBottom: '10px' }}>
-          Day {scan.day_number} · lower is better
+          Day {thisEntry?.dayNumber || scan.day_number} · lower is better
         </div>
         <ScoreRow t={t} label="Acne" value={scan.acne_score} />
         <ScoreRow t={t} label="Redness" note="rough estimate" value={scan.redness_score} />
         <ScoreRow t={t} label="Dryness" note="rough estimate" value={scan.dryness_score} />
         {trend && <p style={{ fontSize: '12px', color: t.muted, marginTop: '4px' }}>{TREND_TEXT[trend]}</p>}
       </div>
+
+      {/* Scan vs previous comparison */}
+      {delta && (
+        <div style={{ ...cardStyle(t), borderLeft: `4px solid ${compColor}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+            <span style={{ fontSize: '18px' }}>{emoji}</span>
+            <div>
+              <div style={{ fontWeight: '800', fontSize: '14px', color: compColor }}>{word} since last scan</div>
+              <div style={{ fontSize: '11px', color: t.muted }}>vs. scan on {prevEntry ? new Date(prevEntry.scan.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : 'previous'}</div>
+            </div>
+          </div>
+          <DeltaChip diff={delta.acne.diff} label="Acne score" />
+          <DeltaChip diff={delta.redness.diff} label="Redness" />
+          <DeltaChip diff={delta.dryness.diff} label="Dryness" />
+          <DeltaChip diff={delta.hydration.diff} label="Hydration" />
+          <div style={{ fontSize: '10px', color: t.faint, marginTop: '6px' }}>Positive = improving. Redness/dryness are rough colour estimates.</div>
+        </div>
+      )}
 
       {showAqi && (
         <div style={{ ...cardStyle(t), display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -110,6 +169,7 @@ export default function ScanResult({ result, theme = 'light' }) {
                     {f.nutrient_value != null && (
                       <span style={{ color: t.faint, fontSize: '11px' }}> ({f.nutrient_value} {f.unit}{f.source ? `, ${f.source}` : ''})</span>
                     )}
+                    <PlanButton food={f.name} kind="try" />
                   </li>
                 ))}
               </ul>
@@ -124,6 +184,7 @@ export default function ScanResult({ result, theme = 'light' }) {
                     <strong>{f.name}</strong>
                     {f.logged_recently && <span style={{ color: WARN, fontSize: '11px' }}> · you logged this recently</span>}
                     <span style={{ color: t.muted }}> · {f.reason}</span>
+                    <PlanButton food={f.name} kind="limit" />
                   </li>
                 ))}
               </ul>

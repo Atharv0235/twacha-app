@@ -30,6 +30,7 @@ export default function TermsConditions({ onBack }) {
           bullets: [
             'Use it only for photos of your own face, and only if you are 18 or older.',
             'Do not upload other people\'s photos.',
+            'Keep your password private. You are responsible for what happens in your account.',
             'The service is provided as it is, may be slow or offline, and may be removed at any time.'
           ]
         },

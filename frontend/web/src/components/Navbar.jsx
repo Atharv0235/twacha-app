@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpRight, Smartphone, Monitor } from 'lucide-react';
+import { ArrowUpRight, Smartphone, Monitor, Bell } from 'lucide-react';
 
 const link = {
   color: 'rgba(255, 255, 255, 0.82)',
@@ -44,6 +44,42 @@ export default function Navbar({ onOpenScan, viewMode, setViewMode, onNavigate }
         </nav>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          {/* Notification symbol */}
+          <button
+            onClick={() => setViewMode('app')}
+            title="Next Scan Notifications"
+            aria-label="Next Scan Notifications"
+            style={{
+              position: 'relative',
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'var(--c-lime)',
+              transition: 'all 0.2s'
+            }}
+          >
+            <Bell size={17} />
+            <span
+              style={{
+                position: 'absolute',
+                top: '7px',
+                right: '7px',
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                backgroundColor: '#ff6b00',
+                border: '1.5px solid var(--c-forest-dark)',
+                boxShadow: '0 0 5px #ff6b00'
+              }}
+            />
+          </button>
+
           <div style={{
             display: 'flex', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.08)',
             padding: '3px', borderRadius: '9999px', border: '1px solid rgba(255, 255, 255, 0.12)'
